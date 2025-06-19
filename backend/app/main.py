@@ -1,15 +1,16 @@
 import os
+import json
+import uuid
+import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime
 from typing import List
 
-# SQLAlchemy (MariaDB) 관련 임포트
-from sqlalchemy import create_engine, text, Table, Column, Integer, String, MetaData, DateTime
-
-# PyMongo (MongoDB) 관련 임포트
-from pymongo import MongoClient
+from kafka import KafkaProducer
+from kafka.errors import NoBrokersAvailable
+from sqlalchemy import create_engine, text, Table, Column, String, MetaData, DateTime
 
 # --- FastAPI 앱 및 CORS 설정 ---
 app = FastAPI()
@@ -23,56 +24,67 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 데이터베이스 연결 설정 ---
-# Docker Compose에서 설정한 환경변수 가져오기
+# --- 설정값 및 전역 변수 ---
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
 MARIADB_URL = os.getenv("MARIADB_URL")
-MONGO_URL = os.getenv("MONGO_URL")
 
-# MariaDB (SQLAlchemy) 연결
+# Producer는 시작 시점에 연결하므로 초기에는 None으로 설정
+producer = None
+
+# MariaDB 연결 (GET 요청 처리를 위해 필요)
 mariadb_engine = create_engine(MARIADB_URL)
 metadata = MetaData()
-# 'entries' 테이블 스키마 정의
 entries_table = Table(
     "entries",
     metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("id", String(36), primary_key=True),
     Column("name", String(50)),
     Column("content", String(200)),
-    Column("created_at", DateTime, default=datetime.now),
+    Column("created_at", DateTime),
 )
 
-# MongoDB (PyMongo) 연결
-mongo_client = MongoClient(MONGO_URL)
-mongo_db = mongo_client.guestbook
-mongo_collection = mongo_db.entries
-
-# --- FastAPI 시작 시 DB 테이블 생성 ---
+# --- FastAPI 시작 이벤트 ---
 @app.on_event("startup")
-def on_startup():
-    # MariaDB에 'entries' 테이블이 없으면 생성
-    with mariadb_engine.connect() as connection:
-        metadata.create_all(connection, checkfirst=True)
-    print("Database tables checked/created.")
+def startup_event():
+    global producer
+    retry_count = 0
+    max_retries = 5
+    while retry_count < max_retries:
+        try:
+            print(f"Connecting to Kafka (Attempt {retry_count + 1}/{max_retries})...")
+            producer = KafkaProducer(
+                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                value_serializer=lambda v: json.dumps(v).encode('utf-8')
+            )
+            print("Kafka Producer connected successfully.")
+            break  # 연결 성공 시 루프 탈출
+        except NoBrokersAvailable:
+            retry_count += 1
+            print(f"Failed to connect to Kafka. Retrying in 5 seconds...")
+            time.sleep(5)
+    
+    if producer is None:
+        print("Could not connect to Kafka after multiple retries. The application might not work as expected.")
 
-# --- Pydantic 모델 정의 ---
+# --- Pydantic 모델 ---
 class GuestbookEntryCreate(BaseModel):
     name: str
     content: str
 
 class GuestbookEntry(GuestbookEntryCreate):
-    id: int
+    id: str
     created_at: str
 
 # --- API 엔드포인트 ---
 
-# 모든 방명록 글 가져오기 (GET) - MariaDB에서 조회
+# 글 목록 조회 (GET)
 @app.get("/api/entries", response_model=List[GuestbookEntry])
 def get_entries():
+    # ... (이전 코드와 동일)
     with mariadb_engine.connect() as connection:
-        query = entries_table.select().order_by(entries_table.c.id.desc())
+        query = entries_table.select().order_by(entries_table.c.created_at.desc())
         result = connection.execute(query)
         entries = result.fetchall()
-        # SQLAlchemy Result 객체를 Pydantic 모델과 호환되는 dict 리스트로 변환
         return [
             {
                 "id": entry.id,
@@ -83,54 +95,44 @@ def get_entries():
             for entry in entries
         ]
 
-# 새 방명록 글 추가하기 (POST) - MariaDB와 MongoDB에 동시 저장
-@app.post("/api/entries", response_model=GuestbookEntry)
+# 새 글 작성 (POST)
+@app.post("/api/entries")
 def create_entry(entry: GuestbookEntryCreate):
-    created_time = datetime.now()
+    if producer is None:
+        raise HTTPException(status_code=503, detail="Kafka producer is not available.")
     
-    # 1. MariaDB에 저장하고 새로 생성된 ID를 가져옴
-    with mariadb_engine.connect() as connection:
-        query = entries_table.insert().values(
-            name=entry.name,
-            content=entry.content,
-            created_at=created_time
-        )
-        result = connection.execute(query)
-        connection.commit()
-        new_id = result.lastrowid # 방금 삽입된 행의 id
-
-    if new_id is None:
-        raise HTTPException(status_code=500, detail="Failed to create entry in MariaDB")
-
-    # 2. MariaDB의 ID를 포함하여 MongoDB에 저장
-    mongo_doc = {
-        "_id": new_id,  # MariaDB의 ID를 MongoDB의 _id로 사용
-        "name": entry.name,
-        "content": entry.content,
-        "created_at": created_time,
+    entry_id = str(uuid.uuid4())
+    created_at = datetime.now().isoformat()
+    
+    message = {
+        "type": "create",
+        "payload": {
+            "id": entry_id,
+            "name": entry.name,
+            "content": entry.content,
+            "created_at": created_at,
+        }
     }
-    mongo_collection.insert_one(mongo_doc)
-
-    return GuestbookEntry(
-        id=new_id,
-        name=entry.name,
-        content=entry.content,
-        created_at=created_time.strftime("%Y-%m-%d %H:%M:%S"),
-    )
-
-# 방명록 글 삭제하기 (DELETE) - MariaDB와 MongoDB에서 동시 삭제
-@app.delete("/api/entries/{entry_id}", status_code=200)
-def delete_entry(entry_id: int):
-    # 1. MariaDB에서 삭제
-    with mariadb_engine.connect() as connection:
-        query = entries_table.delete().where(entries_table.c.id == entry_id)
-        result = connection.execute(query)
-        connection.commit()
-        # 삭제된 행이 없으면 404 에러 발생
-        if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Entry not found in MariaDB")
-
-    # 2. MongoDB에서 삭제
-    mongo_collection.delete_one({"_id": entry_id})
     
-    return {"message": "Entry deleted successfully"}
+    producer.send("guestbook-events", value=message)
+    producer.flush()
+    
+    return {"message": "Entry submission received. It will appear shortly."}
+
+# 글 삭제 (DELETE)
+@app.delete("/api/entries/{entry_id}")
+def delete_entry(entry_id: str):
+    if producer is None:
+        raise HTTPException(status_code=503, detail="Kafka producer is not available.")
+        
+    message = {
+        "type": "delete",
+        "payload": {
+            "id": entry_id
+        }
+    }
+    
+    producer.send("guestbook-events", value=message)
+    producer.flush()
+
+    return {"message": "Deletion request received. The entry will be removed shortly."}
