@@ -5,9 +5,14 @@ services:
   backend:
     build: ./backend
     container_name: guestbook_backend
-    # 개발 중 코드 변경 시 자동 재시작을 원하면 아래 주석을 해제하세요.
-    # volumes:
-    #   - ./backend:/code
+    # DB 컨테이너들이 먼저 실행된 후 실행되도록 설정
+    depends_on:
+      - mariadb
+      - mongodb
+    # DB 접속 정보를 환경변수로 전달
+    environment:
+      - MARIADB_URL=mysql+pymysql://user:password@mariadb/guestbook_db
+      - MONGO_URL=mongodb://mongodb:27017/
     ports:
       - "8000:8000"
 
@@ -16,6 +21,36 @@ services:
     build: ./frontend
     container_name: guestbook_frontend
     ports:
-      - "3000:80" # 호스트의 3000번 포트를 컨테이너의 80번 포트와 연결
+      - "3000:80"
     depends_on:
-      - backend # 백엔드가 먼저 실행되도록 보장
+      - backend
+
+  # MariaDB 서비스 추가
+  mariadb:
+    image: mariadb:10.11 # MariaDB 공식 이미지
+    container_name: guestbook_mariadb
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_password # 루트 비밀번호
+      - MARIADB_DATABASE=guestbook_db      # 생성할 데이터베이스 이름
+      - MARIADB_USER=user                  # 생성할 사용자 이름
+      - MARIADB_PASSWORD=password          # 생성할 사용자 비밀번호
+    volumes:
+      - mariadb_data:/var/lib/mysql # 데이터 영속성을 위한 볼륨
+    ports:
+      - "3306:3306" # 외부에서 DB툴로 접속하려면 필요
+    restart: always
+
+  # MongoDB 서비스 추가
+  mongodb:
+    image: mongo:latest # MongoDB 공식 이미지
+    container_name: guestbook_mongodb
+    volumes:
+      - mongo_data:/data/db # 데이터 영속성을 위한 볼륨
+    ports:
+      - "27017:27017" # 외부에서 DB툴로 접속하려면 필요
+    restart: always
+
+# Docker 볼륨 정의
+volumes:
+  mariadb_data:
+  mongo_data:
