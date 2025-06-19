@@ -1,94 +1,141 @@
+/* 기본 폰트 및 배경 설정 */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 body {
-  background-color: #f0f2f5;
+  background-color: #0059a4; /* 이미지의 파란 배경색 */
+  font-family: 'Malgun Gothic', 'Dotum', 'Apple SD Gothic Neo', sans-serif;
   color: #333;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  /* padding: 20px; <-- 이 줄은 삭제합니다. */
 }
 
-.App {
-  max-width: 800px;
-  margin: 40px auto;
-  padding: 20px;
+.app-container {
+  /* width와 height를 100%로 설정하여 부모(body)를 꽉 채웁니다. */
+  width: 100%;
+  height: 100%;
+
+  /* Flexbox를 사용하여 내용물을 중앙 정렬합니다. */
+  display: flex;
+  justify-content: center; /* 수평 중앙 정렬 */
+  align-items: center;     /* 수직 중앙 정렬 */
+
+  /* 기존 max-width와 margin은 Flexbox 정렬 방식으로 대체되므로 삭제합니다. */
+  /* max-width: 800px; */
+  /* margin: 0 auto; */
+}
+
+
+/* 방명록 창 전체 */
+.guestbook-window {
   background-color: #fff;
+  border: 1px solid #ababab;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3);
+  overflow: hidden; /* 자식 요소가 모서리를 삐져나가지 않도록 */
 }
 
-.App-header {
-  text-align: center;
+/* 창 상단 타이틀 바 */
+.title-bar {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #e8e8e8;
+  border-bottom: 1px solid #ababab;
+  cursor: default; /* 드래그되는 것처럼 보이게 */
 }
 
-h1 {
-  color: #1c1e21;
+.window-controls {
+  display: flex;
+  gap: 8px;
 }
 
-/* Form Styling */
-.guestbook-form {
-  margin: 20px 0;
+.control-btn {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.control-btn.close { background-color: #ff5f57; }
+.control-btn.minimize { background-color: #ffbd2e; }
+.control-btn.maximize { background-color: #28c940; }
+
+.title-text {
+  font-weight: bold;
+  margin: 0 auto; /* 텍스트를 중앙으로 */
+  transform: translateX(-24px); /* 버튼 너비만큼 왼쪽으로 이동하여 시각적 중앙 맞춤 */
+}
+
+/* 창 내부 콘텐츠 영역 */
+.window-content {
   padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  /* 내용이 많아지면 스크롤바 생성 */
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* 글 작성 폼 */
+.guestbook-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.input-name, .input-content {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.input-content {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.submit-btn {
+  align-self: flex-end; /* 버튼을 오른쪽으로 */
+  padding: 8px 16px;
+  border: 1px solid #888;
+  background-color: #f0f0f0;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.submit-btn:hover {
+  background-color: #d8d8d8;
+}
+
+/* 폼과 목록 사이의 구분선 */
+.divider {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 20px 0;
+}
+
+/* 방명록 목록 */
+.guestbook-entries {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-}
-
-.form-group label {
-  margin-bottom: 5px;
-  font-weight: bold;
-}
-
-.form-group input,
-.form-group textarea {
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-.form-group textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-button[type="submit"] {
-  padding: 10px 15px;
-  border: none;
-  background-color: #007bff;
-  color: white;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: bold;
-  transition: background-color 0.2s;
-}
-
-button[type="submit"]:hover {
-  background-color: #0056b3;
-}
-
-/* Entries Styling */
-.guestbook-entries {
-  margin-top: 30px;
-  text-align: left;
-}
-
 .entry {
-  padding: 15px;
+  padding-bottom: 15px;
   border-bottom: 1px solid #eee;
 }
-
 .entry:last-child {
   border-bottom: none;
 }
 
+/* 각 글의 헤더 (작성자 + 시간) */
 .entry-header {
   display: flex;
   justify-content: space-between;
@@ -96,39 +143,51 @@ button[type="submit"]:hover {
   margin-bottom: 8px;
 }
 
-.entry-header strong {
+.entry-author {
+  font-weight: bold;
   font-size: 1.1rem;
-  color: #0056b3;
 }
 
-.entry-header span {
+.entry-timestamp {
   font-size: 0.9rem;
   color: #666;
 }
 
-.entry p {
+/* 각 글의 본문 */
+.entry-body {
   margin: 0;
-  white-space: pre-wrap; /* 줄바꿈 유지 */
+  line-height: 1.6;
+  white-space: pre-wrap; /* 사용자가 입력한 줄바꿈을 그대로 보여줌 */
 }
 
+.no-entries-msg {
+  text-align: center;
+  color: #888;
+  padding: 20px;
+}
+
+/* 시간과 삭제 버튼을 묶는 컨테이너 */
 .entry-meta {
   display: flex;
   align-items: center;
-  gap: 15px; /* 시간과 버튼 사이 간격 */
+  gap: 10px; /* 시간과 버튼 사이의 간격 */
 }
 
+/* 삭제 버튼 스타일 */
 .delete-btn {
-  padding: 3px 8px;
-  border: 1px solid #dc3545;
   background-color: transparent;
-  color: #dc3545;
+  border: 1px solid #bbb;
+  color: #555;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-family: inherit;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.8rem;
   transition: background-color 0.2s, color 0.2s;
 }
 
 .delete-btn:hover {
-  background-color: #dc3545;
-  color: white;
+  background-color: #fbebeb;
+  border-color: #ff5f57;
+  color: #c92828;
 }
