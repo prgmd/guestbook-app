@@ -1,5 +1,5 @@
 services:
-  # --- Infrastucture Services ---
+  # --- 인프라 서비스 (Zookeeper, Kafka, MariaDB, MongoDB) ---
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.3
     container_name: zookeeper
@@ -13,12 +13,10 @@ services:
     depends_on:
       - zookeeper
     ports:
-      # 외부(호스트 머신)에서 Kafka에 접속하기 위한 포트
       - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      # 컨테이너 내부 통신용 리스너
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -47,31 +45,12 @@ services:
       - "27017:27017"
     restart: always
 
-  # --- Application Services ---
-  backend:
-    build: ./backend
-    container_name: guestbook_backend
-    depends_on:
-      - kafka
-    environment:
-      - MARIADB_URL=mysql+pymysql://user:password@mariadb/guestbook_db
-      # Kafka 컨테이너의 내부 리스너 주소를 사용
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-    ports:
-      - "8000:8000"
+  # --- 애플리케이션 서비스 ---
 
-  frontend:
-    build: ./frontend
-    container_name: guestbook_frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-
-  # --- Consumer Services ---
-  mariadb_consumer:
-    build: ./consumers/mariadb
-    container_name: mariadb_consumer
+  # 서버 1: 쓰기 전용 Command Service
+  server1:
+    build: ./server1 # server1 폴더의 Dockerfile을 사용
+    container_name: server1_command
     depends_on:
       - kafka
       - mariadb
@@ -80,9 +59,10 @@ services:
       - MARIADB_URL=mysql+pymysql://user:password@mariadb/guestbook_db
     restart: always
 
-  mongodb_consumer:
-    build: ./consumers/mongodb
-    container_name: mongodb_consumer
+  # 서버 2: 읽기 전용 Query Service
+  server2:
+    build: ./server2 # server2 폴더의 Dockerfile을 사용
+    container_name: server2_query
     depends_on:
       - kafka
       - mongodb
@@ -90,6 +70,17 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - MONGO_URL=mongodb://mongodb:27017/
     restart: always
+
+  # 프론트엔드: Nginx 리버스 프록시
+  frontend:
+    build: ./frontend
+    container_name: frontend_nginx
+    ports:
+      - "3000:80"
+    # 두 백엔드 서버가 모두 준비된 후 시작
+    depends_on:
+      - server1
+      - server2
 
 volumes:
   mariadb_data:

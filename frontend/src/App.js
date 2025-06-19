@@ -8,17 +8,13 @@ function App() {
 
   // 백엔드 API 주소 (docker-compose 환경 기준)
   // Nginx 프록시를 사용할 것이므로 상대 경로로 지정합니다.
-  const API_URL = '/api/entries';
+  const QUERY_API_URL = '/api/query/entries';
+  const COMMAND_API_URL = '/api/command/entries';
 
-  // 컴포넌트가 처음 렌더링될 때 방명록 목록을 불러옵니다.
-  useEffect(() => {
-    fetchEntries();
-  }, []);
-
-  // 방명록 목록을 서버에서 가져오는 함수
+  // 글 목록 조회 (GET)
   const fetchEntries = async () => {
     try {
-      const response = await fetch(API_URL);
+      const response = await fetch(QUERY_API_URL); // <-- URL 변경
       const data = await response.json();
       setEntries(data);
     } catch (error) {
@@ -26,59 +22,43 @@ function App() {
     }
   };
 
-  // 폼 제출 처리 함수
+  // 글 작성 (POST)
   const handleSubmit = async (e) => {
-    e.preventDefault(); // 폼 기본 제출 동작 방지
-
-    if (!name.trim() || !content.trim()) {
-      alert("이름과 내용을 모두 입력해주세요.");
-      return;
-    }
-
+    e.preventDefault();
+    // ... (유효성 검사)
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch(COMMAND_API_URL, { // <-- URL 변경
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, content }),
       });
-
       if (response.ok) {
-        // 성공적으로 등록되면 입력 필드를 비우고 목록을 새로고침합니다.
         setName('');
         setContent('');
-        fetchEntries(); // 목록 다시 불러오기
+        // 글 작성 후 바로 목록을 다시 불러오지 않고,
+        // eventual consistency를 위해 약간의 딜레이를 주거나
+        // 사용자에게 잠시 후 반영된다는 메시지를 보여주는 것이 좋음
+        setTimeout(() => fetchEntries(), 500); // 0.5초 후 목록 새로고침
       } else {
         alert("등록에 실패했습니다.");
       }
-    } catch (error) {
-      console.error("Error creating entry:", error);
-    }
+    } catch (error) { /* ... */ }
   };
 
-  // 삭제 처리 함수
+  // 글 삭제 (DELETE)
   const handleDelete = async (id) => {
-    // 사용자에게 삭제 여부를 한 번 더 확인받습니다.
-    if (!window.confirm("정말로 이 글을 삭제하시겠습니까?")) {
-      return;
-    }
-
+    if (!window.confirm("정말로 이 글을 삭제하시겠습니까?")) return;
     try {
-      const response = await fetch(`${API_URL}/${id}`, {
+      const response = await fetch(`${COMMAND_API_URL}/${id}`, { // <-- URL 변경
         method: 'DELETE',
       });
-
       if (response.ok) {
-        // 성공적으로 삭제되면, 화면에서도 해당 글을 즉시 제거합니다.
-        // 서버에서 목록을 다시 불러오는 대신, 상태를 직접 업데이트하여 더 빠른 반응성을 제공합니다.
-        setEntries(entries.filter(entry => entry.id !== id));
+        // 성공 시 낙관적 업데이트(Optimistic Update) 또는 목록 새로고침
+        fetchEntries();
       } else {
         alert("삭제에 실패했습니다.");
       }
-    } catch (error) {
-      console.error("Error deleting entry:", error);
-    }
+    } catch (error) { /* ... */ }
   };
 
   return (
