@@ -33,7 +33,7 @@ body {
   background-color: #fff;
   border: 1px solid #ababab;
   border-radius: 8px;
-  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3);
+  box-shadow: 5px 5px 45px rgba(0, 0, 0, 0.3);
   overflow: hidden; /* 자식 요소가 모서리를 삐져나가지 않도록 */
 }
 
