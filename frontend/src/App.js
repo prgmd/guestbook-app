@@ -73,7 +73,7 @@ function App() {
             <span className="control-btn minimize"></span>
             <span className="control-btn maximize"></span>
           </div>
-          <span className="title-text">GUESTBOOK</span>
+          <span className="title-text">😎GUESTBOOK</span>
         </div>
 
         {/* 실제 내용이 들어가는 영역 */}
