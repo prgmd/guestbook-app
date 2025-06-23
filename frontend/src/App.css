@@ -35,6 +35,7 @@ body {
   border-radius: 8px;
   box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3);
   overflow: hidden; /* 자식 요소가 모서리를 삐져나가지 않도록 */
+  width: 60%; 
 }
 
 /* 창 상단 타이틀 바 */
@@ -49,7 +50,7 @@ body {
 
 .window-controls {
   display: flex;
-  gap: 30px;
+  gap: 8px;
 }
 
 .control-btn {
